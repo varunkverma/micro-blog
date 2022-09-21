@@ -1,0 +1,125 @@
+Imp Kubernetes related terminologies:
+    ->  Kubernetes Cluster: A collection of nodes + a master to manage them
+    ->  Node:   A VM that will run the containers
+    ->  Pod:    More or less a running container. Technically a Pod can run multiple containers
+    ->  Deployment: Monitors a set of pods, make sure they are running and restarts them if they crashes.
+    ->  Service:    Provides an easy-to-remember URL to access a running container
+
+Kubernetes Config Files:
+    ->  Tells Kubernetes about the different Deployments, Pods, and Services (referred to as 'Objects') that we want to create.
+    ->  Written in YAML syntax
+    ->  Always store these files with our project source code - they are documentation
+    ->  We can create Objects without config files (NOT Recommended). Config files provide a precise definition of what your Cluster is running.
+
+Image Pull Issue: Make it use local images:
+    If you are using a vm driver, you will need to tell Kubernetes to use the Docker daemon running inside of the single node cluster instead of the host.
+
+    If you are using minikube, I suggest you run the following command:
+
+    eval $(minikube docker-env)
+
+    Note - This command will need to be repeated anytime you close and restart the terminal session.
+
+    This will set the registry to minikube VM and will work only for this terminal session. You should see only the images from the VM now, not the local images. So, you will have to build the images again and you will through docker images command.
+
+Some K8s Commands
+->  kubectl get pods                    : Print out information about all of the running pods
+->  kubectl exec -it [pod_name][cmd]    : Execute the given command in a running pod
+->  kubectl logs [pod_name]             : Print out logs from the given pod
+->  kubectl delete pod [pod_name]       : Deletes the given pod
+->  kubectl apply -f [config file name] : Tells Kubernetes to process the config
+->  kubectl describe pod [pod_name]     : Print out some information about the running pod
+
+Deployment Commands
+->  kubectl get deployments                 :   Lists all the running Deployments
+->  kubectl describe deployment [depl name] :   Print out details about a specific deployment
+->  kubectl apply -f [config file name]     :   Create a deployment out of a config file
+->  kubectl delete deployment [depl_name]   :   Delete a deployment
+->  kubectl apply -f .                      :   Apply all config files in the current directory
+
+Updating the Image used by a deployment - Method #1 (Not Used Often)
+    Steps:
+        1.  Make a change to your project code
+        2.  Rebuild the image, specifying a new image version
+        3.  In the deployment config file, update the version of the image
+        4.  Run the command "kubectl apply -f [depl file name]"
+
+Updating the Image used by a deployment - Method #2 (Preferred way)
+    Steps:
+        1.  The deployment must be using the 'latest' tag in the pod spec section
+        2.  Make an update to your code
+        3.  Build the image
+        4.  Push the image to docker hub (Not if doing locally)
+        5.  Run the command "kubectl rollout restart deployment [depl_name]"
+
+        NOTE: the command takes deployment's name, not the depl file name
+
+Services
+    ->  It's an object, similar to Pod and Deployment objects.
+    ->  We also create services using config files.
+    ->  Services provide networking between pods, i.e., they are used to setup some communication between all our pods or to get access to a pod from the outside of our cluster.
+    ->  So any time we are thinking of networking or communicating in any way, we are always thinking of services.
+    ->  Behind the scenes, there are several types of services:
+        1.  Cluster IP*: Sets up an easy-to-remember URL to access a pod. Only exposes pods in the cluster.
+            Used anytime that we want to set up communication between different pods inside of our cluster.
+        2.  Node port*:  Makes a pod accessible from out the cluster. Usually only used for dev purposes.
+            This is mostly used for development purposes.
+        3.  Load Balancer:  Makes a pod accessible from outside the cluster. This is the right way to expose a pod to the outside world.
+        4.  External Name:  Redirects an in-cluster request to a CNAME url
+    ->  All these types of services are actually types of objects.
+    
+    ->  If you can´t acces your NodePort and you are running minikube 
+        Run: 'minikube service posts-srv', where posts-srv is the name of the nodeport.
+
+NOTES:
+    -   All objects we create are made by first creating a config file and then applying that config file to the cluster
+
+
+Load Balancer and Ingress
+
+    ->  Load Balancer Service:
+            -   Tells Kubernetes to react out to its provider and provision a load balancer. Gets traffic in a single pod.
+            -   A load balancer service is going to tell our cluster to reach out to its cloud provider and provision a load balancer.
+                This load balancer exists completely outside of our cluster. Its a part of the cloud service provider suite of services
+                This load balancer is going to be used to take traffic from the outside world and direct it in to some pod in the cluster.
+            -   But a load balancer lacks the routing knowledge and can reach to only one pod and hence this is where Ingress comes in the picture.
+
+    ->  Ingress or Ingress Controller:
+            -   It is a pod with a set of routing rules to distribute traffic to other services inside of our cluster.
+            -   It is going to work alongside the load balancer service
+            -   So an outside request is coming in still to a load balancer that has been provisioned with the cloud provider.
+                But that load balancer is going to send that request on to this Ingress Controller.
+                Ingress Controller which is pod and part of the cluster, is going to have a set of routing rules inside of it.
+                Its gonna look at the path of the incoming request and then decide based on the path whether to the appropriate cluster Ip service that is sending request on to the corresponding pod.
+    
+    -> ingress-nginx
+            -   Project that will create a Load balancer service + an Ingress 
+
+NOTE: we need to add the localhost minikube IP of the host we are using in ingress-srv
+    -   open "/etc/hosts" file e.g., use command "code /etc/hosts" 
+    -   Add minikube ip address (can be found using command "minikube ip") and the host name
+        e.g., 192.168.49.2 posts.com
+    -   now access the website using the host name without hosting it on a cloud provider
+        e.g., http://posts.com/posts
+        This request will first be send to load balancer which will forward it to ingress-nginx controller which will route it to posts cluster IP service, which in turn will pass it on to the posts pod
+
+Skaffold
+    ->  A CLI tool Automates many tasks in a Kubernetes dev environment.
+    ->  Makes it really easy to update code in a running pod.
+    ->  Makes it really easy to create/delete all objects tied to a project at once.
+    ->  skaffold.dev
+    ->  As a part of config, we let scaffold know the path where it can find our k8s directory. 
+        This is telling scaffold that there's a collection of different config files intended for Kubernetes inside the k8s directory.
+        So by adding this manifiests line, we are telling scaffold that we want it to watch all of these different yaml files.
+        Any time that we make a change to one of those files, Scaffold is going to automatically reapply that config file to out Kubernetes cluster
+        By listing out manifiests, Scaffold is also going to make sure to create all these or apply all these files any time that we start the scaffold . It's also going to delete all the config or the objects associated with these config files whenever we stop scaffold as well
+    ->  by default, whenever scaffold makes a change to one of our images or re-builds an image, it's going to try to push it up to DockerHub, If that is not actually required when using scaffold, we can disable that
+
+
+Imp lessons:
+    ->  The big challenge in microservices is data.
+    ->  Async communication is one of the different ways to share data between services.
+        Async communication focuses on communicating changes using events sent to an event bus.
+        Async communication encourages each service to be 100% self-sufficient. Relatively easy to handle temporary downtime or new service creation. This helps to reduce direct dependencies between services.
+    ->  Docker makes it easier to package up services.
+    ->  Kubernetes is a pain to setup, but it makes really easy to deploy and scale services. 

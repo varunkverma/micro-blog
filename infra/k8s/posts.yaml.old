@@ -1,0 +1,9 @@
+apiVersion: v1 # K8s is extensible - we can add in out own custom objects. This specifies the set of obejcts we want k8s to look at
+kind: Pod # The type of object we want to create
+metadata: # Config options for the objects we are about to create
+  name: posts # When the pod is created, give it a name of 'posts'
+spec: # The exact attributes we want to apply to the object we are about to create
+  containers: # We can create many containers in a single pod
+    - name: posts
+      image: micro-posts:0.0.1
+      imagePullPolicy: IfNotPresent
